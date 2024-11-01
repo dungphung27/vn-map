@@ -623,7 +623,8 @@ function getDistances(lat,lng) {
     const distances = []
     markersArray.forEach(mark =>{
         let distance = haversine(lat,lng,mark.latlng.lat,mark.latlng.lng)
-        if (distance > mark.radius)
+        console.log(distance)
+        if (distance < mark.radius)
             distances.push({...mark,distance : distance})
     })
     idString = distances.map(d => d.markerId).join(', ')

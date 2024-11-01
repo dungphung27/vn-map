@@ -44,7 +44,7 @@
                 </select>
                 <div class="slider-container">
                     <label for="radiusInput">Enter Radius (meters):</label>
-                    <input type="range" id="radiusInput" min="100" max="5000" value="500" step="10">
+                    <input type="range" id="radiusInput" min="50" max="1000" value="500" step="10">
                     <div class="radius-value" id="radiusValue">Radius: 2500 meters</div>
                 </div>
             </form>
@@ -155,6 +155,8 @@
                 f.disabled = false;
             })
         }
+        var userLat = 16.072472100976857
+        var userLong = 108.22016532762554
         window.onbeforeunload = function() {
     getSeen();
 };
@@ -330,7 +332,7 @@
                         }
                     })
                     .then(()=>{
-                        getDistances(start);
+                        getDistances(userLat,userLong);
                     })
                     .catch((error) => {
                         console.error("Error fetching markers: ", error);
@@ -616,21 +618,15 @@
             // app.js
 // app.js
 let old = null,idString
-function getDistances(start) {
+function getDistances(lat,lng) {
     console.log(markersArray.length)
-    let ends = markersArray.map(marker => ({
-      lat: marker.latlng.lat,
-      lng: marker.latlng.lng,
-      name: marker.name,
-      radius: marker.radius,
-      id: marker.markerId
-    }));
-    console.log(10000,ends)
-
-  const worker = new Worker('worker.js');
-  worker.onmessage = function(event) {
-    const { distances } = event.data;
-    idString = distances.map(d => d.id).join(', ')
+    const distances = []
+    markersArray.forEach(mark =>{
+        let distance = haversine(lat,lng,mark.latlng.lat,mark.latlng.lng)
+        if (distance > mark.radius)
+            distances.push({...mark,distance : distance})
+    })
+    idString = distances.map(d => d.markerId).join(', ')
     if(!idString) idString = 0
     console.log(distances)
     if(idString != old)
@@ -642,24 +638,16 @@ function getDistances(start) {
   } else{
     main(`Người được giám sát không ở trong khu vực an toàn`,0)
   }
+  old = idString
     distances.forEach(distanceObj => {
       console.log(`Khoảng cách đến ${distanceObj.name}: ${distanceObj.distance} km`);
     });
   };
 }
-  old = idString
+  
   // Gửi dữ liệu start và ends (mảng các marker) tới worker
-  worker.postMessage({ start, ends });
-}
 
 // Ví dụ dữ liệu
-const start = { lat: 16.072116636493035 , lng: 108.22014346779358 };
-const ends = [
-  { name: 'Marker A', lat: 10.776889, lng: 106.700981 },
-  { name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },
-  { name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },{ name: 'Marker B', lat:16.03808263094596,  lng: 108.18956198313644  },
-  // Thêm các marker khác
-];
 let clientMarker = L.icon({
     iconUrl:'marker.svg',
     iconSize: [20,20]
@@ -669,8 +657,6 @@ let clientMarker = L.icon({
         function getPosition(position)
         {
             let currentZoom = map.getZoom(); // Lấy độ zoom hiện tại
-            var userLat = 16.072472100976857
-            var userLong = 108.22016532762554
             var lat = position.coords.latitude// Vĩ độ (latitude)
             var long = position.coords.longitude;  // Kinh độ (longitude)
             var accuracy = position.coords.accuracy
@@ -678,6 +664,7 @@ let clientMarker = L.icon({
             cliMarker = L.marker([lat,long],{icon: clientMarker}).addTo(map)
             oldLat = lat
             oldlong = long
+             console.log( haversine(userLat,userLong,oldLat,oldlong))
             if(marker) {
                 map.removeLayer(marker)
             }
@@ -727,13 +714,11 @@ let clientMarker = L.icon({
                     })
                     .then(() => {
                         currentRoute = L.Routing.control({
-                            router: L.routing.osrmv1({
-            serviceUrl: 'http://localhost:5001/route/v1' // Địa chỉ OSRM
-        }),
                             waypoints: [
                                 L.latLng(oldLat, oldlong),
                                 L.latLng(latitude, longitude)
                             ],
+                            
                             createMarker: function () { return null; },
                             lineOptions: {
                                 addWaypoints: false, // Tắt tương tác với đường
@@ -743,8 +728,9 @@ let clientMarker = L.icon({
                             console.log(e);
                             var routes = e.routes;
                             console.log(2,routes[0].summary.totalDistance)
+                            let dis = routes[0].summary.totalDistance
+                            console.log(dis)
                         }).addTo(map)
-                        currentRoute._clearLines()
                     })
                     .then(() => {
                         let list = document.querySelector(".leaflet-top.leaflet-right");
@@ -755,7 +741,7 @@ let clientMarker = L.icon({
                     })
                     .then(()=>{
                         if (!tmp1) tmp1 = true;
-                        else getDistances(start);
+                        else getDistances(userLat,userLong);
                     })
                     .catch(error => console.error('Error:', error));
             }
@@ -773,26 +759,34 @@ let clientMarker = L.icon({
                     });
         }
         console.log(markersArray)
-        function get_distance(marker)
-        {
-            let distance
-            L.Routing.control({
-                            waypoints: [
-                                L.latLng(16.03812387594597, 108.18952979662883),
-                                L.latLng(16.072137255469055, 108.22015419662947)
-                            ],
-                            createMarker: function () { return null; },
-                           
-                        }).getRouter((err, routes) => {
-                if (err) {
-                    console.error(err);
-                    return;
-                }
+        function haversine(lat1, lon1, lat2, lon2) {
+    // Bán kính Trái Đất (tính bằng km)
+    const R = 6371.0;
 
-                const distance = routes[0].summary.totalDistance; // Khoảng cách tính bằng mét
-                console.log(`Khoảng cách giữa hai điểm: ${(distance / 1000).toFixed(2)} km`);
-            });
-        }
+    // Chuyển đổi từ độ sang radian
+    const toRad = (value) => value * Math.PI / 180;
+
+    const lat1Rad = toRad(lat1);
+    const lon1Rad = toRad(lon1);
+    const lat2Rad = toRad(lat2);
+    const lon2Rad = toRad(lon2);
+
+    // Tính sự khác biệt giữa các tọa độ
+    const deltaLat = lat2Rad - lat1Rad;
+    const deltaLon = lon2Rad - lon1Rad;
+
+    // Áp dụng Haversine formula
+    const a = Math.sin(deltaLat / 2) ** 2 +
+              Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(deltaLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    // Tính khoảng cách
+    const distance = R * c;
+
+    return distance; // Khoảng cách tính bằng km
+}
+
+
 	</script>
 </body>
 </html>
